@@ -17,6 +17,9 @@ import {
   getNotificationsEnabled, setNotificationsEnabled,
   getDurudEnabled, setDurudEnabled,
   getDurudIntervalHours, setDurudIntervalHours,
+  getDurudQuietHoursEnabled, setDurudQuietHoursEnabled,
+  getDurudQuietStart, setDurudQuietStart,
+  getDurudQuietEnd, setDurudQuietEnd,
 } from '../utils/storage';
 import {
   cancelAllNotifications,
@@ -46,6 +49,13 @@ const getStreakMessage = (n) => {
   if (n < 14)  return 'SubhanAllah! One week+ streak! 🌟';
   if (n < 30)  return 'Incredible consistency! ⭐⭐';
   return 'Allahu Akbar! You are truly dedicated! 👑';
+};
+
+/** Formats an on-the-hour value (0-23) as a 12-hour clock label, e.g. 22 → "10:00 PM". */
+const formatHour12 = (hour) => {
+  const period = hour < 12 ? 'AM' : 'PM';
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h12}:00 ${period}`;
 };
 
 // ── Shared sub-components ──────────────────────────────────────────────────────
@@ -119,6 +129,10 @@ export default function ToolsScreen() {
   const [durudEnabled, setDurudEnabledState] = useState(false);
   const [durudInterval, setDurudIntervalState] = useState(1);
   const [intervalPickerOpen, setIntervalPickerOpen] = useState(false);
+  const [quietEnabled, setQuietEnabledState] = useState(true);
+  const [quietStartHour, setQuietStartHourState] = useState(22);
+  const [quietEndHour, setQuietEndHourState] = useState(8);
+  const [quietPickerFor, setQuietPickerFor] = useState(null); // null | 'start' | 'end'
   // Loading
   const [loading, setLoading] = useState(true);
   // Quote
@@ -134,13 +148,16 @@ export default function ToolsScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     const todayKey = new Date().toISOString().split('T')[0];
-    const [s, w, todayDone, notif, durudOn, durudHrs] = await Promise.all([
+    const [s, w, todayDone, notif, durudOn, durudHrs, quietOn, quietStart, quietEnd] = await Promise.all([
       getStreakData(),
       getWeeklyData(),
       getCompletedPrayers(todayKey),
       getNotificationsEnabled(),
       getDurudEnabled(),
       getDurudIntervalHours(),
+      getDurudQuietHoursEnabled(),
+      getDurudQuietStart(),
+      getDurudQuietEnd(),
     ]);
     setStreak(s);
     setWeekly(w);
@@ -148,6 +165,9 @@ export default function ToolsScreen() {
     setNotifEnabled(notif);
     setDurudEnabledState(durudOn);
     setDurudIntervalState(durudHrs);
+    setQuietEnabledState(quietOn);
+    setQuietStartHourState(quietStart.hour);
+    setQuietEndHourState(quietEnd.hour);
     setLoading(false);
   }, []);
 
@@ -169,13 +189,22 @@ export default function ToolsScreen() {
     }
   };
 
+  // Builds the { enabled, startHour, endHour } object scheduleDurudReminder expects,
+  // optionally overriding one field with a value not yet committed to state.
+  const buildQuietParam = (overrides = {}) => ({
+    enabled:   quietEnabled,
+    startHour: quietStartHour,
+    endHour:   quietEndHour,
+    ...overrides,
+  });
+
   const handleDurudToggle = async (value) => {
     setDurudEnabledState(value);
     await setDurudEnabled(value);
     if (value) {
       const granted = await requestNotificationPermission();
       if (granted) {
-        await scheduleDurudReminder(durudInterval);
+        await scheduleDurudReminder(durudInterval, buildQuietParam());
       } else {
         setDurudEnabledState(false);
         await setDurudEnabled(false);
@@ -190,7 +219,33 @@ export default function ToolsScreen() {
     await setDurudIntervalHours(hours);
     setIntervalPickerOpen(false);
     if (durudEnabled) {
-      await scheduleDurudReminder(hours);
+      await scheduleDurudReminder(hours, buildQuietParam());
+    }
+  };
+
+  const handleQuietToggle = async (value) => {
+    setQuietEnabledState(value);
+    await setDurudQuietHoursEnabled(value);
+    if (durudEnabled) {
+      await scheduleDurudReminder(durudInterval, buildQuietParam({ enabled: value }));
+    }
+  };
+
+  const handleSelectQuietHour = async (hour) => {
+    if (quietPickerFor === 'start') {
+      setQuietStartHourState(hour);
+      await setDurudQuietStart({ hour, minute: 0 });
+    } else if (quietPickerFor === 'end') {
+      setQuietEndHourState(hour);
+      await setDurudQuietEnd({ hour, minute: 0 });
+    }
+    const which = quietPickerFor;
+    setQuietPickerFor(null);
+    if (durudEnabled) {
+      await scheduleDurudReminder(
+        durudInterval,
+        buildQuietParam(which === 'start' ? { startHour: hour } : { endHour: hour })
+      );
     }
   };
 
@@ -353,6 +408,47 @@ export default function ToolsScreen() {
                   <Text style={styles.intervalChevron}>›</Text>
                 </View>
               </TouchableOpacity>
+
+              <HR styles={styles} />
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingMeta}>
+                  <Text style={styles.settingLabel}>Quiet Hours</Text>
+                  <Text style={styles.settingHint}>
+                    {quietEnabled
+                      ? `No Durud reminders from ${formatHour12(quietStartHour)} to ${formatHour12(quietEndHour)}`
+                      : 'Reminders play at all hours, day and night'}
+                  </Text>
+                </View>
+                <Switch
+                  value={quietEnabled}
+                  onValueChange={handleQuietToggle}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                  thumbColor={quietEnabled ? Colors.primaryLight : Colors.textSecondary}
+                />
+              </View>
+
+              {quietEnabled && (
+                <View style={styles.quietTimeRow}>
+                  <TouchableOpacity
+                    style={styles.quietTimeBox}
+                    onPress={() => setQuietPickerFor('start')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.quietTimeLabel}>Off from</Text>
+                    <Text style={styles.quietTimeValue}>{formatHour12(quietStartHour)}</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.quietTimeArrow}>→</Text>
+                  <TouchableOpacity
+                    style={styles.quietTimeBox}
+                    onPress={() => setQuietPickerFor('end')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.quietTimeLabel}>On from</Text>
+                    <Text style={styles.quietTimeValue}>{formatHour12(quietEndHour)}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </>
           )}
 
@@ -416,6 +512,55 @@ export default function ToolsScreen() {
             </View>
 
             <TouchableOpacity style={styles.pickerCloseBtn} onPress={() => setIntervalPickerOpen(false)}>
+              <Text style={styles.pickerCloseText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Quiet hours time picker ── */}
+      <Modal
+        visible={!!quietPickerFor}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setQuietPickerFor(null)}
+      >
+        <TouchableOpacity
+          style={styles.pickerOverlay}
+          activeOpacity={1}
+          onPress={() => setQuietPickerFor(null)}
+        >
+          <View style={styles.pickerSheet} onStartShouldSetResponder={() => true}>
+            <Text style={styles.pickerTitle}>
+              {quietPickerFor === 'start' ? 'Quiet Hours — Off From' : 'Quiet Hours — On From'}
+            </Text>
+            <Text style={styles.pickerSub}>
+              {quietPickerFor === 'start'
+                ? "Durud reminders stop from this time"
+                : 'Durud reminders resume from this time'}
+            </Text>
+
+            <ScrollView style={styles.hourPickerScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.pickerGrid}>
+                {Array.from({ length: 24 }, (_, h) => h).map((hr) => {
+                  const active = hr === (quietPickerFor === 'start' ? quietStartHour : quietEndHour);
+                  return (
+                    <TouchableOpacity
+                      key={hr}
+                      style={[styles.pickerChip, styles.hourChip, active && styles.pickerChipActive]}
+                      onPress={() => handleSelectQuietHour(hr)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.pickerChipText, active && styles.pickerChipTextActive]}>
+                        {formatHour12(hr)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.pickerCloseBtn} onPress={() => setQuietPickerFor(null)}>
               <Text style={styles.pickerCloseText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -502,6 +647,15 @@ const getStyles = (Colors) => StyleSheet.create({
   // Durud interval row
   intervalValueBox: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   intervalChevron:  { fontSize: 16, color: Colors.textMuted, fontWeight: '700' },
+
+  // Durud quiet hours
+  quietTimeRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  quietTimeBox:   { flex: 1, backgroundColor: Colors.cardLight, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, paddingVertical: 10, alignItems: 'center' },
+  quietTimeLabel: { fontSize: 10, color: Colors.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
+  quietTimeValue: { fontSize: 15, color: Colors.primary, fontWeight: '700' },
+  quietTimeArrow: { fontSize: 16, color: Colors.textMuted, fontWeight: '700' },
+  hourPickerScroll: { maxHeight: 340 },
+  hourChip:       { width: '22%' },
 
   // Durud interval picker modal
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },

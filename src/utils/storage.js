@@ -5,6 +5,9 @@ const COMPLETE_DAYS_KEY    = 'complete_days';
 const NOTIFICATIONS_KEY    = 'notifications_enabled';
 const DURUD_ENABLED_KEY    = 'durud_notifications_enabled';
 const DURUD_INTERVAL_KEY   = 'durud_notifications_interval_hours';
+const DURUD_QUIET_ENABLED_KEY = 'durud_quiet_hours_enabled';
+const DURUD_QUIET_START_KEY   = 'durud_quiet_hours_start';
+const DURUD_QUIET_END_KEY     = 'durud_quiet_hours_end';
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
@@ -185,6 +188,69 @@ export const setDurudIntervalHours = async (hours) => {
   }
 };
 
+// ─── Durud quiet hours (mute reminder overnight, user-configurable) ───────────
+// Default: quiet from 10:00 PM to 8:00 AM, i.e. no Durud reminders overnight.
+
+const DEFAULT_QUIET_START = { hour: 22, minute: 0 }; // 10:00 PM
+const DEFAULT_QUIET_END   = { hour: 8,  minute: 0 }; // 8:00 AM
+
+/** Returns true if Durud quiet hours are enabled (default: true). */
+export const getDurudQuietHoursEnabled = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(DURUD_QUIET_ENABLED_KEY);
+    return raw === null ? true : JSON.parse(raw);
+  } catch {
+    return true;
+  }
+};
+
+/** Persists whether Durud quiet hours are enabled. */
+export const setDurudQuietHoursEnabled = async (enabled) => {
+  try {
+    await AsyncStorage.setItem(DURUD_QUIET_ENABLED_KEY, JSON.stringify(enabled));
+  } catch {
+    // ignore
+  }
+};
+
+/** Returns the quiet-hours start time as { hour, minute } (default 22:00 / 10 PM). */
+export const getDurudQuietStart = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(DURUD_QUIET_START_KEY);
+    return raw === null ? DEFAULT_QUIET_START : JSON.parse(raw);
+  } catch {
+    return DEFAULT_QUIET_START;
+  }
+};
+
+/** Persists the quiet-hours start time as { hour, minute }. */
+export const setDurudQuietStart = async (time) => {
+  try {
+    await AsyncStorage.setItem(DURUD_QUIET_START_KEY, JSON.stringify(time));
+  } catch {
+    // ignore
+  }
+};
+
+/** Returns the quiet-hours end time as { hour, minute } (default 8:00 / 8 AM). */
+export const getDurudQuietEnd = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(DURUD_QUIET_END_KEY);
+    return raw === null ? DEFAULT_QUIET_END : JSON.parse(raw);
+  } catch {
+    return DEFAULT_QUIET_END;
+  }
+};
+
+/** Persists the quiet-hours end time as { hour, minute }. */
+export const setDurudQuietEnd = async (time) => {
+  try {
+    await AsyncStorage.setItem(DURUD_QUIET_END_KEY, JSON.stringify(time));
+  } catch {
+    // ignore
+  }
+};
+
 /**
  * Returns an array of 7 objects (Mon-today) each with:
  * { date, dayName, completed, allDone }
@@ -205,3 +271,4 @@ export const getWeeklyData = async () => {
   }
   return result;
 };
+

@@ -82,7 +82,6 @@ function DuaDetailView({ category, dua, styles, onBack }) {
           <>
             {content.parts.map((part, idx) => (
               <View key={idx} style={styles.duaPartCard}>
-                <Text style={styles.duaPartNumber}>{dua.id}.{idx + 1}</Text>
                 {!!part.intro && (
                   <Text style={styles.duaIntro}>{part.intro}</Text>
                 )}
@@ -413,12 +412,6 @@ const getStyles = (Colors) => StyleSheet.create({
     paddingVertical:  18,
     paddingHorizontal: 16,
     marginBottom:     14,
-  },
-  duaPartNumber: {
-    fontSize:   12,
-    fontWeight: '700',
-    color:      Colors.primary,
-    marginBottom: 8,
   },
   duaArabic: {
     fontFamily: 'UthmanicHafsV22',

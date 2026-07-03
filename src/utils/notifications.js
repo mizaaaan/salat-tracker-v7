@@ -115,34 +115,68 @@ export const cancelAllNotifications = async () => {
 };
 
 /**
- * Schedule a true, infinitely-repeating Durud / Salawat reminder every
- * `intervalHours` hours, using the OS's native repeat trigger.
- *
- * NOTE: a native repeating notification is locked to ONE fixed message —
- * the OS fires it forever without the app ever needing to be reopened.
- * Rotating between multiple messages would require rescheduling on each
- * firing, which only happens while the app is open — so to guarantee the
- * reminder keeps firing even if the app is never reopened, we use just the
- * first message here.
- * Cancels any previously scheduled Durud reminder first.
+ * Returns true if the given hour (0-23, on-the-hour) falls inside the quiet
+ * window. Handles windows that wrap past midnight (e.g. 22:00 → 08:00).
  */
-export const scheduleDurudReminder = async (intervalHours = 1) => {
+const isWithinQuietHours = (hour, quiet) => {
+  if (!quiet || !quiet.enabled) return false;
+
+  const start = quiet.startHour;
+  const end   = quiet.endHour;
+
+  if (start === end) return false; // zero-length window = never quiet
+
+  if (start < end) {
+    // Same-day window, e.g. 01:00 → 05:00
+    return hour >= start && hour < end;
+  }
+  // Wraps past midnight, e.g. 22:00 → 08:00
+  return hour >= start || hour < end;
+};
+
+const DEFAULT_QUIET_HOURS = { enabled: true, startHour: 22, endHour: 8 };
+
+/**
+ * Schedules a Durud / Salawat reminder every `intervalHours` hours,
+ * skipping any hour that falls within the given quiet-hours window
+ * (e.g. 10 PM – 8 AM) so the user isn't woken up overnight.
+ *
+ * Implementation note: rather than one repeating "every N seconds" trigger
+ * (which can't skip specific hours), this schedules one native *daily
+ * calendar* trigger — { hour, minute: 0, repeats: true } — for every active
+ * hour-of-day in the cycle. Each one is a true OS-level repeating alarm, so
+ * it keeps firing forever without the app ever needing to reopen, exactly
+ * like the previous approach, but now quiet hours are simply the hours we
+ * never schedule. Messages rotate across the scheduled hours for variety.
+ *
+ * Cancels any previously scheduled Durud reminders first.
+ */
+export const scheduleDurudReminder = async (intervalHours = 1, quiet = DEFAULT_QUIET_HOURS) => {
   await cancelByType('durud');
 
-  const msg = DURUD_MESSAGES[0];
+  const step = Math.max(1, Math.min(12, Math.round(intervalHours)));
 
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: msg.title,
-      body:  msg.body,
-      sound: true,
-      data:  { type: 'durud' },
-    },
-    trigger: {
-      seconds:  Math.max(1, Math.round(intervalHours * 3600)),
-      repeats:  true,
-    },
-  });
+  let msgIndex = 0;
+  for (let hour = 0; hour < 24; hour += step) {
+    if (isWithinQuietHours(hour, quiet)) continue;
+
+    const msg = DURUD_MESSAGES[msgIndex % DURUD_MESSAGES.length];
+    msgIndex++;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: msg.title,
+        body:  msg.body,
+        sound: true,
+        data:  { type: 'durud' },
+      },
+      trigger: {
+        hour,
+        minute:  0,
+        repeats: true,
+      },
+    });
+  }
 };
 
 /** Cancel only the scheduled Durud reminder (prayer notifications are untouched). */
