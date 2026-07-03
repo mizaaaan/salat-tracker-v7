@@ -82,7 +82,7 @@ function DuaDetailView({ category, dua, styles, onBack }) {
           <>
             {content.parts.map((part, idx) => (
               <View key={idx} style={styles.duaPartCard}>
-                <Text style={styles.duaPartNumber}>৬.{idx + 1}</Text>
+                <Text style={styles.duaPartNumber}>{dua.id}.{idx + 1}</Text>
                 {!!part.intro && (
                   <Text style={styles.duaIntro}>{part.intro}</Text>
                 )}
