@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "SalatTracker",
+    "slug": "salat-tracker",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A1A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.salattracker.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "CFBundleDisplayName": "Salat Tracker",
+        "NSLocationWhenInUseUsageDescription": "Your location is used to calculate accurate prayer times and Qibla direction.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Your location is used to calculate accurate prayer times and Qibla direction.",
+        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0A1A"
+      },
+      "package": "com.salattracker.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Your location is used to calculate accurate prayer times and Qibla direction."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#C9A84C"
+        }
+      ],
+      "expo-sensors"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-eas-project-id-here"
+      }
+    }
+  }
+}

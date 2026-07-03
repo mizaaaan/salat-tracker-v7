@@ -1,0 +1,69 @@
+workflows:
+  ios-unsigned:
+    name: Salat Tracker — Unsigned IPA
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    environment:
+      node: 20.11.0
+      xcode: 16.2      # ← Fixed: Xcode 16 instead of "latest" (which was Xcode 26 beta!)
+      cocoapods: default
+      vars:
+        APP_NAME: SalatTracker
+        BUNDLE_ID: com.salattracker.app
+
+    scripts:
+      - name: Install Node dependencies
+        script: |
+          npm install
+
+      - name: Expo Prebuild — generate native iOS project
+        script: |
+          npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: CocoaPods install
+        script: |
+          cd ios && pod install
+
+      - name: Build app
+        script: |
+          xcodebuild \
+            -workspace ios/$APP_NAME.xcworkspace \
+            -scheme $APP_NAME \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath /tmp/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package IPA
+        script: |
+          APP_PATH=$(find /tmp/DerivedData/Build/Products \
+            -name "*.app" -maxdepth 3 | head -1)
+          echo "✅ App found: $APP_PATH"
+          echo "✅ App size: $(du -sh "$APP_PATH")"
+
+          rm -rf /tmp/Payload
+          mkdir -p /tmp/Payload
+          ditto "$APP_PATH" "/tmp/Payload/$(basename $APP_PATH)"
+
+          cd /tmp
+          zip -r $APP_NAME.ipa Payload
+          echo "✅ IPA size: $(du -sh $APP_NAME.ipa)"
+
+          mkdir -p $CM_BUILD_DIR/build/ios/ipa
+          mv /tmp/$APP_NAME.ipa $CM_BUILD_DIR/build/ios/ipa/
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      email:
+        recipients:
+          - md.mizan235@gmail.com    # ← YOUR EMAIL HERE
+        notify:
+          success: true
+          failure: true
